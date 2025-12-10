@@ -5,280 +5,166 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Brewtopia Dashboard</title>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 <style>
   body {
     margin: 0;
     background: #141414;
     color: #ffffff;
     font-family: "Segoe UI", Roboto, sans-serif;
-    overflow-x: hidden;
-    overflow-y: auto;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
     align-items: center;
   }
 
+  /* --- Hourly Forecast Strip --- */
+  .forecast-bar {
+    width: 100%;
+    white-space: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    background: #1f1f1f;
+    padding: 8px 0;
+    display: flex;
+    gap: 12px;
+    border-bottom: 2px solid #333;
+  }
+  .hour-block {
+    flex: 0 0 auto;
+    background: #2a2a2a;
+    padding: 6px 10px;
+    border-radius: 10px;
+    text-align: center;
+    color: #fff;
+    min-width: 75px;
+  }
+  .hour-block img {
+    width: 40px;
+    height: 40px;
+  }
+
+  /* --- Main clocks/weather label --- */
   header {
     margin-top: 8px;
     font-size: 1.6em;
-    font-weight: 600;
   }
-
   .time {
     font-size: 1.8em;
-    margin: 4px 0 10px 0;
+    margin: 8px 0;
   }
-
   .current-weather {
     font-size: 1.2em;
-    margin-bottom: 6px;
+    margin-bottom: 15px;
   }
 
-  .alert-bar {
-    width: 100%;
-    text-align: center;
-    font-size: 1.05em;
-    margin: 10px 0;
-    padding: 6px;
-    color: #ffeeaa;
-    min-height: 28px;
-  }
-
-  /* Camera Row */
+  /* --- Cameras --- */
   .camera-container {
     display: flex;
     justify-content: center;
-    align-items: stretch;
     gap: 20px;
-    width: 100%;
-    padding: 10px;
+    flex-wrap: wrap;
   }
   .camera {
-    flex: 1 1 50%;
     background: #000;
     border-radius: 10px;
     overflow: hidden;
-    display: flex;
   }
   .camera img {
-    width: 100%;
-    height: auto;
+    width: 400px;
+    height: 225px;
     object-fit: cover;
   }
 
   footer {
+    position: absolute;
+    bottom: 5px;
     font-size: 0.9em;
     color: #777;
-    margin: 8px 0 12px 0;
   }
 </style>
 </head>
 
 <body>
 
-<!-- HEADER TOP -->
-<header>Brewtopia Coffee Trailer Dashboard</header>
-<div class="time" id="time"></div>
+  <!-- HOURLY FORECAST STRIP -->
+  <div class="forecast-bar" id="forecast"></div>
 
-<!-- WEATHER GRAPH -->
-<div style="width: 100%; padding: 10px;">
-  <canvas id="weatherChart" height="180"></canvas>
-</div>
+  <header>Brewtopia Coffee Trailer Dashboard</header>
+  <div class="time" id="time"></div>
+  <div class="current-weather" id="currentWeather">Loading weather...</div>
 
-<div class="current-weather" id="currentWeather">Loading weather...</div>
-
-<!-- ALERT DESCRIPTION -->
-<div class="alert-bar" id="alertBar">Checking for weather alerts…</div>
-
-<!-- CAMERA SECTION -->
-<div style="height: 10px;"></div>
-<div class="camera-container">
-  <div class="camera">
-    <img id="cam1" src="http://192.168.1.91/cgi-bin/mjpg/video.cgi?channel=1&subtype=1&t=1">
+  <!-- CAMERAS -->
+  <div class="camera-container">
+    <div class="camera">
+<img id="cam1" src="http://admin:An794613$$@192.168.1.91/cgi-bin/mjpg/video.cgi?channel=1&subtype=1&t=1">
+<img id="cam2" src="http://admin:An794613$$@192.168.1.71/cgi-bin/mjpg/video.cgi?channel=1&subtype=1&t=2">
+    </div>
   </div>
-  <div class="camera">
-    <img id="cam2" src="http://192.168.1.71/cgi-bin/mjpg/video.cgi?channel=1&subtype=1&t=2">
-  </div>
-</div>
 
-<footer>Weather updates hourly • Page reloads every 60 minutes</footer>
+  <footer>Weather updates hourly â€¢ Page reloads every 60 minutes</footer>
+
 
 <script>
-/* CLOCK */
+/* --- CLOCK --- */
 function updateClock() {
   const now = new Date();
   document.getElementById("time").textContent =
     now.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) +
-    " — " +
+    " â€” " +
     now.toLocaleDateString([], {weekday: "long", month: "short", day: "numeric"});
 }
 setInterval(updateClock, 1000);
 updateClock();
 
-/* WEATHER CONFIG */
-const apiKey = "ce57b328ddd2af95c06b77dc11a49bf6";
-const lat = 36.2037;
+/* --- WEATHER CONFIG --- */
+const apiKey = "ce57b328ddd2af95c06b77dc11a49bf6";  // <---- Replace this
+const lat = 36.2037;  // Andersonville TN
 const lon = -84.0680;
 
-let weatherChart;
-
-/* PRELOAD IMAGES */
-function preloadImages(urls, callback) {
-  let loaded = 0;
-  let images = [];
-  urls.forEach((url, i) => {
-    images[i] = new Image();
-    images[i].onload = () => {
-      loaded++;
-      if (loaded === urls.length) callback(images);
-    };
-    images[i].src = url;
-  });
-}
-
-/* LOAD WEATHER + GRAPH */
-function loadWeatherGraph() {
-  const url =
-    `https://api.openweathermap.org/data/3.0/onecall?lat=${lat}&lon=${lon}` +
-    `&units=imperial&appid=${apiKey}`;
+/* --- FETCH WEATHER --- */
+function fetchWeather() {
+  const url = `https://api.openweathermap.org/data/3.0/onecall?lat=${lat}&lon=${lon}&units=imperial&appid=${apiKey}`;
 
   fetch(url)
     .then(r => r.json())
     .then(data => {
-      const hours = data.hourly.slice(0, 24);
-
-      /* CURRENT WEATHER */
+      /* --- Current Weather --- */
       const cw = data.current;
       document.getElementById("currentWeather").innerHTML =
-        `Andersonville: ${Math.round(cw.temp)}°F — ${cw.weather[0].main}`;
+        `Andersonville: ${Math.round(cw.temp)}Â°F â€” ${cw.weather[0].main}`;
 
-      /* ALERTS */
-      if (data.alerts && data.alerts.length > 0) {
-        const alertText = data.alerts.map(a =>
-          `${a.event}: ${a.description.split('\n')[0]}`
-        ).join("<br>");
-        document.getElementById("alertBar").innerHTML = alertText;
-      } else {
-        const gust = cw.wind_gust ? ` (gusts ${Math.round(cw.wind_gust)} mph)` : "";
-        document.getElementById("alertBar").textContent =
-          `Wind ${Math.round(cw.wind_speed)} mph${gust} • Visibility ${(cw.visibility/1000).toFixed(1)} mi`;
+      /* --- Hourly Forecast Strip (next 12 hours) --- */
+      const fc = document.getElementById("forecast");
+      fc.innerHTML = ""; // clear old blocks
+
+      for (let i = 0; i < 12; i++) {
+        const hour = data.hourly[i];
+        const block = document.createElement("div");
+        block.className = "hour-block";
+
+        const date = new Date(hour.dt * 1000);
+        const hourString = date.toLocaleTimeString([], { hour: "numeric" });
+
+        block.innerHTML = `
+          <div>${hourString}</div>
+          <img src="https://openweathermap.org/img/wn/${hour.weather[0].icon}@2x.png">
+          <div>${Math.round(hour.temp)}Â°F</div>
+        `;
+
+        fc.appendChild(block);
       }
-
-      /* GRAPH ARRAYS */
-      const labels = [];
-      const temps = [];
-      const precip = [];
-      const iconUrls = [];
-
-      for (let h of hours) {
-        const d = new Date(h.dt * 1000);
-        const hr = d.getHours();
-        labels.push(
-          hr === 0 ? "12a" :
-          hr < 12 ? `${hr}a` :
-          hr === 12 ? "12p" :
-          `${hr - 12}p`
-        );
-        temps.push(Math.round(h.temp));
-        precip.push((h.pop || 0) * 100);
-        iconUrls.push(`https://openweathermap.org/img/wn/${h.weather[0].icon}.png`);
-      }
-
-      /* PRELOAD ICONS THEN DRAW */
-      preloadImages(iconUrls, (icons) => {
-        /* DESTROY OLD CHART */
-        if (weatherChart) weatherChart.destroy();
-
-        const ctx = document.getElementById("weatherChart").getContext("2d");
-
-        /* CUSTOM PLUGIN: ICONS + TEMPS */
-        const labelPlugin = {
-          id: "labelPlugin",
-          afterDraw(chart) {
-            const xAxis = chart.scales.x;
-            const bottom = xAxis.bottom;
-
-            icons.forEach((img, i) => {
-              const x = xAxis.getPixelForValue(i);
-
-              /* ICON */
-              chart.ctx.drawImage(img, x - 12, bottom + 5, 24, 24);
-
-              /* TEMP TEXT */
-              chart.ctx.fillStyle = "#fff";
-              chart.ctx.font = "12px Segoe UI";
-              chart.ctx.textAlign = "center";
-              chart.ctx.fillText(temps[i] + "°", x, bottom + 42);
-            });
-          }
-        };
-
-        /* BUILD CHART */
-        weatherChart = new Chart(ctx, {
-          type: "line",
-          data: {
-            labels: labels,
-            datasets: [
-              {
-                label: "Temperature",
-                data: temps,
-                borderColor: "rgba(255,100,50,1)",
-                backgroundColor: "rgba(255,100,50,0.25)",
-                borderWidth: 3,
-                tension: 0.35,
-                yAxisID: "temp"
-              },
-              {
-                label: "Precip %",
-                data: precip,
-                borderColor: "rgba(0,180,255,1)",
-                backgroundColor: "rgba(0,180,255,0.2)",
-                borderWidth: 2,
-                tension: 0.35,
-                yAxisID: "pop"
-              }
-            ]
-          },
-          options: {
-            animation: false,
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              temp: {
-                type: "linear",
-                position: "left",
-                ticks: { color: "#ff9966" },
-                grid: { color: "rgba(255,255,255,0.05)" }
-              },
-              pop: {
-                type: "linear",
-                position: "right",
-                ticks: { color: "#44ccff" },
-                min: 0,
-                max: 100,
-                grid: { display: false }
-              },
-              x: {
-                ticks: { color: "#ddd", autoSkip: false },
-                grid: { color: "rgba(255,255,255,0.05)" }
-              }
-            },
-            plugins: {
-              legend: { labels: { color: "#fff" } }
-            }
-          },
-          plugins: [labelPlugin]
-        });
-      });
+    })
+    .catch(err => {
+      document.getElementById("currentWeather").textContent =
+        "Weather unavailable";
+      console.error(err);
     });
 }
 
-loadWeatherGraph();
-setInterval(loadWeatherGraph, 60 * 60 * 1000);
+fetchWeather();
+setInterval(fetchWeather, 60 * 60 * 1000); // hourly refresh
 
-/* PAGE RELOAD SAFETY */
+/* --- Auto Page Reload --- */
 setTimeout(() => location.reload(), 60 * 60 * 1000);
 </script>
 
